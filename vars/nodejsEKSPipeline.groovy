@@ -10,6 +10,7 @@ def call (map configMap){
             acc_id = "978092319764"
             project = configMap.get("project")
             component = configMap.get("component")
+            org = "Pandu-sys"
         }
         options {
             disableConcurrentBuilds()
@@ -81,7 +82,7 @@ def call (map configMap){
                         sh '''
                             set -e
 
-                            REPO="Pandu-sys/catalogue"
+                            REPO="${org/${component}"
 
                             curl -s -L \
                             -H "Accept: application/vnd.github+json" \
