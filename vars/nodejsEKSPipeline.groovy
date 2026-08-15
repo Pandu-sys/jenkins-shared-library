@@ -1,4 +1,4 @@
-def call (){
+def call (map configMap){
     pipeline {
         agent { 
             node { 
@@ -8,8 +8,8 @@ def call (){
         environment {
             def appVersion = ""
             acc_id = "978092319764"
-            project = "roboshop"
-            component = "catalogue"
+            project = configMap.get("project")
+            component = configMap.get("component")
         }
         options {
             disableConcurrentBuilds()
