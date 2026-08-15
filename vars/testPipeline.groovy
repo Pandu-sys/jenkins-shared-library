@@ -12,7 +12,7 @@ def call (Map configMap){
                     script {
                         sh """
                            echo 'Building..'
-                           echo "project: ${project}, component: ${component}
+                           echo "project: ${project}, component: ${component}"
                         """
                     }
                 }
