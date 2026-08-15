@@ -1,17 +1,19 @@
-def call (Map configMap){
+def call(Map configMap) {
     pipeline {
-        agent { 
-            node { 
-                label 'ROBOSHOP' 
-            } 
+        agent {
+            node {
+                label 'ROBOSHOP'
+            }
         }
+
         environment {
-            def appVersion = ""
+            appVersion = ""
             acc_id = "978092319764"
             project = configMap.get("project")
             component = configMap.get("component")
             org = "Pandu-sys"
         }
+
         options {
             disableConcurrentBuilds()
             timeout(time: 15, unit: 'MINUTES')
