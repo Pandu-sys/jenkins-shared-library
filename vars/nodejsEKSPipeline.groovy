@@ -1,4 +1,4 @@
-def call (map configMap){
+def call (Map configMap){
     pipeline {
         agent { 
             node { 
