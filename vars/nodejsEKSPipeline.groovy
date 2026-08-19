@@ -55,10 +55,10 @@ def call(Map configMap) {
                             sh """
                                 npm test
                             """
-                            updateCommitStatus("success", "unit tests are successful", "unit-tests")
+                            utils.updateCommitStatus("success", "unit tests are successful", "unit-tests")
                         }
                         catch(Exception e){
-                            updateCommitStatus("failure", "unit tests are failed", "unit-tests")
+                            utils.updateCommitStatus("failure", "unit tests are failed", "unit-tests")
                         }   
                     } 
                 }
