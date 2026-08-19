@@ -78,7 +78,11 @@ def call(Map configMap) {
                         script {
                             def qg = waitForQualityGate()
                             if (qg.status != 'OK') {
+                                utils.updateCommitStatus("failure", "sonar scan is failed", "sonar-scan")
                                 error "Pipeline aborted due to quality gate failure: ${qg.status}"
+                            }
+                            else {
+                                utils.updateCommitStatus("success", "sonar scan is successful", "sonar-scan")
                             }
                         }
                     }
@@ -108,9 +112,11 @@ def call(Map configMap) {
 
                             if [ "$HIGH_CRITICAL_COUNT" -gt 0 ]; then
                                 echo "❌ Found ${HIGH_CRITICAL_COUNT} High/Critical severity dependency alert(s). Failing build."
+                                utils.updateCommitStatus("failure", "library scan is failed", "library-scan")
                                 exit 1
                             else
                                 echo "✅ No High/Critical dependency alerts found."
+                                utils.updateCommitStatus("success", "library scan is successful", "library-scan")
                             fi
                         '''
                     }
@@ -119,12 +125,19 @@ def call(Map configMap) {
             stage('Docker Build') {
                 steps {
                     script {
-                        withAWS(credentials: 'aws-creds', region: 'us-east-1') {
-                            sh """
-                                aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${acc_id}.dkr.ecr.us-east-1.amazonaws.com
-                                docker build -t ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion} .
-                            """
-                    }
+                        try{
+                            withAWS(credentials: 'aws-creds', region: 'us-east-1') {
+                                sh """
+                                    aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${acc_id}.dkr.ecr.us-east-1.amazonaws.com
+                                    docker build -t ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion} .
+                                """
+                            }
+                            utils.updateCommitStatus("success", "image build is successful", "image build")
+                        }
+                        catch(Exception e){
+                              utils.updateCommitStatus("failure", "image build is failed", "image build")
+                              throw e
+                        }
                     }
                 }
             }
@@ -146,7 +159,11 @@ def call(Map configMap) {
                         )
 
                         if (dockerfileScan != 0 || imageScan != 0) {
+                            utils.updateCommitStatus("failure", "trivy scan is failed", "trivy-scan")
                             error "Trivy found HIGH/CRITICAL issues in Dockerfile and/or OS packages. Failing pipeline."
+                        }
+                        else{
+                            utils.updateCommitStatus("success", "trivy scan is successful", "trivy-scan")
                         }
                     }
                 }
@@ -154,12 +171,19 @@ def call(Map configMap) {
             stage('ECR Image Push') {
                 steps {
                     script {
-                        withAWS(credentials: 'aws-creds', region: 'us-east-1') {
-                            sh """
-                                aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${acc_id}.dkr.ecr.us-east-1.amazonaws.com
-                                docker push ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion}
-                            """
-                    }
+                        try{
+                            withAWS(credentials: 'aws-creds', region: 'us-east-1') {
+                                sh """
+                                    aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${acc_id}.dkr.ecr.us-east-1.amazonaws.com
+                                    docker push ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion}
+                                """
+                           }
+                           utils.updateCommitStatus("success", "image push is successful", "image push")
+                        }
+                        catch(Exception e){
+                              utils.updateCommitStatus("failure", "image push is failed", "image push")
+                              throw e
+                        }
                     }
                 }
             }
