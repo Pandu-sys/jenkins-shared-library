@@ -135,7 +135,6 @@ def call(Map configMap) {
             stage('Docker Build') {
                 steps {
                     script {
-                        // in this block we get aws authentication
                         try{
                             withAWS(credentials: 'aws-creds', region: 'us-east-1') {
                                 sh """
@@ -143,12 +142,12 @@ def call(Map configMap) {
                                     docker build -t ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion} .
                                 """
                             }
-                            utils.updateCommitStatus("success", "image build success", "build-image")
+                            utils.updateCommitStatus("success", "image build is successful", "image build")
                         }
                         catch(Exception e){
-                            utils.updateCommitStatus("failure", "image build failed", "build-image")
-                            throw e
-                        } 
+                              utils.updateCommitStatus("failure", "image build is failed", "image build")
+                              throw e
+                        }
                     }
                 }
             }
@@ -170,59 +169,56 @@ def call(Map configMap) {
                         )
 
                         if (dockerfileScan != 0 || imageScan != 0) {
-                            utils.updateCommitStatus("failure", "trivy scan failed", "trivy-scan")
+                            utils.updateCommitStatus("failure", "trivy scan is failed", "trivy-scan")
                             error "Trivy found HIGH/CRITICAL issues in Dockerfile and/or OS packages. Failing pipeline."
                         }
                         else{
-                            utils.updateCommitStatus("success", "trivy scan success", "trivy-scan")
+                            utils.updateCommitStatus("success", "trivy scan is successful", "trivy-scan")
                         }
                     }
                 }
             }
-            stage('ECR Image push') {
+            stage('ECR Image Push') {
                 steps {
                     script {
-                        // in this block we get aws authentication
                         try{
                             withAWS(credentials: 'aws-creds', region: 'us-east-1') {
                                 sh """
                                     aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${acc_id}.dkr.ecr.us-east-1.amazonaws.com
                                     docker push ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion}
                                 """
-                            }
-                            utils.updateCommitStatus("success", "image push success", "push-image")
+                           }
+                           utils.updateCommitStatus("success", "image push is successful", "image push")
                         }
                         catch(Exception e){
-                            utils.updateCommitStatus("failure", "image push failed", "push-image")
-                            throw e
+                              utils.updateCommitStatus("failure", "image push is failed", "image push")
+                              throw e
                         }
-                        
                     }
                 }
             }
             stage('Deploy') {
+                when {
+                    // Evaluates the boolean parameter directly
+                    expression { "${params.DEPLOY}" }
+                }
+                /* input {
+                    message "Should we continue?"
+                    ok "Yes, we should."
+                    submitter "alice,bob"
+                    parameters {
+                        string(name: 'PERSON', defaultValue: 'Mr Jenkins', description: 'Who should I say hello to?')
+                    }
+                } */
                 steps {
                     script {
-                        try{
-                            withAWS(credentials: 'aws-creds', region: 'us-east-1') {
-                                sh """
-                                    aws eks update-kubeconfig --region us-east-1 --name roboshop
-                                    cd helm
-                                    helm upgrade --install ${component} -f values-dev.yaml -n roboshop-dev \
-                                    --set deployment.imageVersion=${appVersion} \
-                                    --wait --timeout 5m .
-
-                                    kubectl rollout status deployment/${component} -n roboshop-dev --timeout=2m
-                                """
-                            }
-                            utils.updateCommitStatus("success", "dev deploy succcess", "dev-deploy")
-                        }
-                        catch(Exception e){
-                            utils.updateCommitStatus("failure", "dev deploy failed", "dev-deploy")
-                            throw e
-                        }
+                        sh """
+                            echo "Deploying"
+                        """
                     }
                 }
+            }
+        }
 
         post { 
             always { 
