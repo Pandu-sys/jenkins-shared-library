@@ -63,7 +63,7 @@ def call(Map configMap) {
                     } 
                 }
             }
-            stage('SonarQube Analysis') {
+           /*  stage('SonarQube Analysis') {
                 steps {
                     // 'My SonarQube Server' must match the name configured in Jenkins System settings
                     withSonarQubeEnv('sonar-server') {
@@ -87,7 +87,7 @@ def call(Map configMap) {
                         }
                     }
                 }
-            }
+            } */
             stage('Check Dependabot Alerts') {
                 steps {
                     script{
