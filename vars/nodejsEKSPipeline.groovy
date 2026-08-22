@@ -205,9 +205,9 @@ def call(Map configMap) {
                                 sh """
                                 aws eks update-kubeconfig --region us-east-1 --name roboshop-dev
                                 cd helm
-                                helm upgrade install ${component} -f values-dev.yaml -n roboshop-dev\
+                                helm upgrade install ${component} . -f values-dev.yaml -n roboshop-dev\
                                 --set deployment.imageVersion=${appVersion}\
-                                --wait --timeout 5m . 
+                                --wait --timeout 5m
 
                                 kubectl rollout status deployment/${component} -n roboshop-dev --timeout=2m
                                 """
