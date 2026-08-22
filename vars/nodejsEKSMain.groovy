@@ -83,7 +83,7 @@ def call(Map configMap) {
                     }
                 }
             }
-        }
+
             stage('promote image'){
                 steps{
                     script{
@@ -97,6 +97,7 @@ def call(Map configMap) {
                 }
             }
         }
+    }
 
         post { 
             always { 
@@ -114,4 +115,4 @@ def call(Map configMap) {
            }
         }
     }
-}
+
