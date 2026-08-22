@@ -38,7 +38,7 @@ def call(Map configMap) {
                     }
                 }
             }
-            stage('Deploy') {
+            stage('Dev Deploy') {
                 steps {
                     script {
                         try {
@@ -62,6 +62,7 @@ def call(Map configMap) {
                     }
                 }
             }
+        
             stage('api-tests'){
                 steps{
                     script{
@@ -79,6 +80,19 @@ def call(Map configMap) {
                               utils.updateCommitStatus("failure", "api tests is failed", "api tests")
                               throw e
                         }
+                    }
+                }
+            }
+        }
+            stage('promote image'){
+                steps{
+                    script{
+                         withAWS(credentials: 'aws-creds', region: 'us-east-1'){
+                            sh """
+                               docker pull ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion}
+                               docker tag ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion} ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${env.GIT_COMMIT}
+                               docker push ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${env.GIT_COMMIT}
+                           """
                     }
                 }
             }
