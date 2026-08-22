@@ -203,7 +203,7 @@ def call(Map configMap) {
                         try {
                            withAWS(credentials: 'aws-creds', region: 'us-east-1'){
                                 sh """
-                                aws update-kubeconfig --region us-east-1 --name roboshop-dev
+                                aws eks update-kubeconfig --region us-east-1 --name roboshop-dev
                                 cd helm
                                 helm upgrade install ${component} -f values-dev.yaml -n roboshop-dev\
                                 --set deployment.imageVersion=${appVersion}\
