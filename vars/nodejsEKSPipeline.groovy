@@ -198,23 +198,26 @@ def call(Map configMap) {
                 }
             }
             stage('Deploy') {
-                when {
-                    // Evaluates the boolean parameter directly
-                    expression { "${params.DEPLOY}" }
-                }
-                /* input {
-                    message "Should we continue?"
-                    ok "Yes, we should."
-                    submitter "alice,bob"
-                    parameters {
-                        string(name: 'PERSON', defaultValue: 'Mr Jenkins', description: 'Who should I say hello to?')
-                    }
-                } */
                 steps {
                     script {
-                        sh """
-                            echo "Deploying"
-                        """
+                        try {
+                           withAWS(credentials: 'aws-creds', region: 'us-east-1'){
+                                sh """
+                                aws update-kubeconfig --region us-east-1 --name roboshop-dev
+                                cd helm
+                                helm upgrade install -f values-dev.yaml -n roboshop-dev\
+                                --set deployment.imageVesrion=${appVersion}\
+                                --wait --timeout 5m
+
+                                kubectl rollout status deployment/${component} -n roboshop-dev --timeout=2m
+                                """
+                           }
+                           utils.updateCommitStatus("success", "dev deploy is successful", "dev deploy")
+                        }
+                        catch(Exception e){
+                              utils.updateCommitStatus("failure", "dev deploy is failed", "dev deploy")
+                              throw e
+                        }
                     }
                 }
             }
