@@ -34,7 +34,7 @@ def call (Map configMap){
             project = configMap.get("project")
             component = configMap.get("component")
             org = "Pandu-sys"
-            JIRA_SITE = "roboshop-jira"
+            JIRA_SITE = "daws-90s"
             jiraProjectKey = "DAWS90S"
         }
         options {
