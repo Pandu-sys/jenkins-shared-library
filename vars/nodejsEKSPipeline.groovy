@@ -227,7 +227,7 @@ def call(Map configMap) {
                         try{
                             build job: 'catalogue-api-tests',
                             wait: true, // should wait
-                            propagater: true, // downstream errors are considered as upstream errors too
+                            propagate: true, // downstream errors are considered as upstream errors too
                             parameters: [
                                 string(name: 'NAMESPACE', value: 'roboshop-dev'),
                                 string(name: 'COMMIT_ID', value: "${env.GIT_COMMIT}")
@@ -237,6 +237,23 @@ def call(Map configMap) {
                         catch(Exception e){
                               utils.updateCommitStatus("failure", "api tests is failed", "api tests")
                               throw e
+                        }
+                    }
+                }
+            }
+            stage('raise-pr'){
+                when {
+                    not {branch 'main'}
+                }
+                steps {
+                    script{
+                        try{
+                           utils.createPullRequest('main', "${component}: ${env.BRANCH_NAME} -> main", "Automated PR after successful dev-deploy and api-tests.\n\nBuild: ${env.BUILD_URL}console")
+                           utils.updateCommitStatus('success', 'PR raised/verified', 'raise-pr')
+                        }
+                        catch (Exception e) {
+                            utils.updateCommitStatus('failure', 'Failed to raise PR', 'raise-pr')
+                            throw e
                         }
                     }
                 }
