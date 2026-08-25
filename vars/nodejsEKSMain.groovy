@@ -138,7 +138,7 @@ def call (Map configMap){
                 steps {
                     script {
                         try {
-                            build job: 'ROBOSHOP/catalogue-api-tests', parameters: [
+                            build job: 'catalogue-api-tests', parameters: [
                                 string(name: 'NAMESPACE', value: 'roboshop-dev'),
                                 string(name: 'COMMIT_ID', value: env.GIT_COMMIT)
                             ], wait: true, propagate: true
