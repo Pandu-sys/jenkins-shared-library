@@ -229,7 +229,7 @@ def call (Map configMap){
                         try {
                             withAWS(credentials: 'aws-creds', region: 'us-east-1') {
                                 sh """
-                                    aws eks update-kubeconfig --name roboshop --region us-east-1
+                                    aws eks update-kubeconfig --name roboshop-dev --region us-east-1
 
                                     helm upgrade --install ${env_COMPONENT} ./helm \
                                         -f ./helm/values-sit.yaml \
@@ -264,7 +264,7 @@ def call (Map configMap){
                     script {
                         try {
                             withAWS(credentials: 'aws-creds', region: 'us-east-1') {
-                                sh "aws eks update-kubeconfig --name roboshop --region us-east-1"
+                                sh "aws eks update-kubeconfig --name roboshop-dev --region us-east-1"
 
                                 /* The Jenkins agent can't resolve *.svc.cluster.local from
                                    roboshop-sit, but it's in the same VPC as the EKS pods —
@@ -308,7 +308,7 @@ def call (Map configMap){
                         try {
                             withAWS(credentials: 'aws-creds', region: 'us-east-1') {
                                 sh """
-                                    aws eks update-kubeconfig --name roboshop --region us-east-1
+                                    aws eks update-kubeconfig --name roboshop-dev --region us-east-1
 
                                     helm upgrade --install ${env_COMPONENT} ./helm \
                                         -f ./helm/values-uat.yaml \
@@ -343,7 +343,7 @@ def call (Map configMap){
                     script {
                         try {
                             withAWS(credentials: 'aws-creds', region: 'us-east-1') {
-                                sh "aws eks update-kubeconfig --name roboshop --region us-east-1"
+                                sh "aws eks update-kubeconfig --name roboshop-dev --region us-east-1"
 
                                 /* The Jenkins agent can't resolve *.svc.cluster.local from
                                    roboshop-uat, but it's in the same VPC as the EKS pods —
@@ -417,7 +417,7 @@ def call (Map configMap){
                 steps {
                     script {
                         withAWS(credentials: 'aws-creds', region: 'us-east-1') {
-                            sh "aws eks update-kubeconfig --name roboshop --region us-east-1"
+                            sh "aws eks update-kubeconfig --name roboshop-dev --region us-east-1"
 
                             /* Only attempt a rollback if there's a prior successful release
                                to roll back to — a failed first-ever deploy has nothing behind it. */
