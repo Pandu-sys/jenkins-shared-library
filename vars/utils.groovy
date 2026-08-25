@@ -43,7 +43,7 @@ def updateCommitStatus(String state, String description, String context = 'Jenki
     }
 }
 
-/* def validateCommitStatus(String commitSha, List requiredContexts) {
+def validateCommitStatus(String commitSha, List requiredContexts) {
     withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
         def repoUrl = sh(script: 'git remote get-url origin', returnStdout: true).trim()
         def repoPath = repoUrl.replaceAll(/.*github\.com[\/:]/, '').replaceAll(/\.git$/, '')
@@ -81,4 +81,4 @@ def updateCommitStatus(String state, String description, String context = 'Jenki
             '''
         }
     }
-} */
+}
