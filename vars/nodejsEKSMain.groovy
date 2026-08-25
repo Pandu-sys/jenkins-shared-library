@@ -1,90 +1,157 @@
-def call(Map configMap) {
+def call (Map configMap){
     pipeline {
         agent {
             node {
                 label 'ROBOSHOP'
             }
         }
-
+        parameters {
+            /* 'dev' is first, so it's the default when this build is triggered
+               automatically by a push to main (no parameters supplied). */
+            choice(name: 'ENVIRONMENT', choices: ['dev', 'sit', 'uat', 'prod'], description: 'Environment to deploy to')
+            string(name: 'COMMIT_ID', defaultValue: '', description: 'Commit SHA to promote (required for sit/uat/prod)')
+            string(name: 'COMPONENT', defaultValue: 'catalogue', description: 'Component to deploy')
+            string(name: 'PROJECT', defaultValue: 'roboshop', description: 'Project name')
+            string(name: 'CR_NUMBER', defaultValue: '', description: 'Change Request number (required for prod deploy)')
+            string(name: 'VERSION', defaultValue: '', description: 'Release version to tag the commit with on a successful prod deploy, e.g. v1.4.0 (required for prod deploy)')
+            string(name: 'ISSUE_KEY', defaultValue: '', description: 'Jira ticket key this build should update (set automatically by the dev pipeline when it creates the ticket; leave blank for manual promotions with no Jira tracking)')
+        }
         environment {
-            appVersion = ""
+            def appVersion = ""
+            def issueKey = ""
+            /* Resolved once in 'resolve-inputs': prefer the Jira webhook's env.* payload
+               (GenericTrigger only ever populates env.*, never params.*) and fall back to
+               params.* for manual "Build with Parameters" runs. Every stage below reads
+               these instead of params.* directly, so one build handles both trigger paths. */
+            def env_ENVIRONMENT = ""
+            def env_COMMIT_ID = ""
+            def env_COMPONENT = ""
+            def env_PROJECT = ""
+            def env_ISSUE_KEY = ""
+            def env_VERSION = ""
+            def env_CR_NUMBER = ""
             acc_id = "978092319764"
             project = configMap.get("project")
             component = configMap.get("component")
             org = "Pandu-sys"
+            JIRA_SITE = "roboshop-jira"
+            jiraProjectKey = "DAWS90S"
         }
-
         options {
             disableConcurrentBuilds()
             timeout(time: 15, unit: 'MINUTES')
         }
-        /* parameters {
-            string(name: 'PERSON', defaultValue: 'Mr Jenkins', description: 'Who should I say hello to?')
-            text(name: 'BIOGRAPHY', defaultValue: '', description: 'Enter some information about the person')
-            booleanParam(name: 'DEPLOY', defaultValue: true, description: 'Toggle this value')
-            choice(name: 'CHOICE', choices: ['One', 'Two', 'Three'], description: 'Pick something')
-            password(name: 'PASSWORD', defaultValue: 'SECRET', description: 'Enter a password')
-        } */
-        // Build
+        /* Branch jobs under this multibranch project have their whole Configure page
+           locked (computed from the Jenkinsfile scan), so "Trigger builds remotely"
+           can't be set via the UI at all. Declaring the trigger here instead means it's
+           regenerated from code on every scan — Jira Automation calls this webhook
+           directly. The 'jira-secret' credential is a Secret text credential; its
+           value is whatever gets passed as ?token=... in the webhook URL. */
+        triggers {
+            GenericTrigger(
+                genericVariables: [
+                    [key: 'ENVIRONMENT', value: '$.ENVIRONMENT'],
+                    [key: 'COMMIT_ID', value: '$.COMMIT_ID'],
+                    [key: 'COMPONENT', value: '$.COMPONENT'],
+                    [key: 'PROJECT', value: '$.PROJECT'],
+                    [key: 'ISSUE_KEY', value: '$.ISSUE_KEY'],
+                    [key: 'VERSION', value: '$.VERSION'],
+                    [key: 'CR_NUMBER', value: '$.CR_NUMBER']
+                ],
+                tokenCredentialId: 'jira-secret',
+                causeString: 'Triggered by Jira Automation',
+                printContributedVariables: true,
+                printPostContent: true
+            )
+        }
         stages {
-            stage ('Read version'){
+            /* Runs first, always. Resolves the real inputs for this build once, so
+               every later stage can just read these instead of choosing between
+               params.* and env.* itself. env.* wins when present (webhook path) —
+               params.ENVIRONMENT is a choice param and can never actually be blank,
+               so it can't be used as an "was this a webhook build" signal itself. */
+            stage('resolve-inputs') {
+                steps {
+                    script {
+                        env_ENVIRONMENT = (env.ENVIRONMENT?.trim() ?: params.ENVIRONMENT)?.trim()
+                        env_COMMIT_ID   = (env.COMMIT_ID?.trim() ?: params.COMMIT_ID)?.trim()
+                        env_COMPONENT   = (env.COMPONENT?.trim() ?: params.COMPONENT)?.trim()
+                        env_PROJECT     = (env.PROJECT?.trim() ?: params.PROJECT)?.trim()
+                        env_ISSUE_KEY   = (env.ISSUE_KEY?.trim() ?: params.ISSUE_KEY)?.trim()
+                        env_VERSION     = (env.VERSION?.trim() ?: params.VERSION)?.trim()
+                        env_CR_NUMBER   = (env.CR_NUMBER?.trim() ?: params.CR_NUMBER)?.trim()
+                        echo "Resolved inputs: ENVIRONMENT=${env_ENVIRONMENT} COMMIT_ID=${env_COMMIT_ID} COMPONENT=${env_COMPONENT} PROJECT=${env_PROJECT} ISSUE_KEY=${env_ISSUE_KEY}"
+                    }
+                }
+            }
+            /* Re-verify the merged commit in dev: redeploy the image built on the
+               feature branch and re-run api-tests against it before it's considered good. */
+            stage('read-version'){
+                when {
+                    expression { env_ENVIRONMENT == 'dev' }
+                }
                 steps{
-                    script{
+                    script {
                         def packageJson = readJSON file: 'package.json'
-                        // Extract the version field
-                        appVersion = packageJson.version 
-                        // Output to console log
+                        appVersion = packageJson.version
                         echo "The application version is: ${appVersion}"
                     }
                 }
             }
-            stage('Dev Deploy') {
+            stage('dev-deploy') {
+                when {
+                    expression { env_ENVIRONMENT == 'dev' }
+                }
                 steps {
                     script {
                         try {
-                           withAWS(credentials: 'aws-creds', region: 'us-east-1'){
+                            withAWS(credentials: 'aws-creds', region: 'us-east-1') {
                                 sh """
-                                aws eks update-kubeconfig --region us-east-1 --name roboshop-dev
-                                cd helm
-                                helm upgrade --install ${component} . -f values-dev.yaml -n roboshop-dev\
-                                --set deployment.imageVersion=${appVersion}\
-                                --wait --timeout 5m
+                                    aws eks update-kubeconfig --name roboshop --region us-east-1
 
-                                kubectl rollout status deployment/${component} -n roboshop-dev --timeout=2m
+                                    helm upgrade --install ${component} ./helm \
+                                        -f ./helm/values-dev.yaml \
+                                        --namespace roboshop-dev \
+                                        --create-namespace \
+                                        --set deployment.imageVersion=${appVersion} \
+                                        --wait --timeout 5m
+
+                                    kubectl rollout status deployment/${component} -n roboshop-dev --timeout=120s
                                 """
-                           }
-                           utils.updateCommitStatus("success", "dev deploy is successful", "dev deploy")
+                            }
+                            utils.updateCommitStatus('success', 'Deployed to roboshop-dev', 'dev-deploy')
                         }
-                        catch(Exception e){
-                              utils.updateCommitStatus("failure", "dev deploy is failed", "dev deploy")
-                              throw e
+                        catch (Exception e) {
+                            utils.updateCommitStatus('failure', 'Deploy to roboshop-dev failed', 'dev-deploy')
+                            throw e
                         }
                     }
                 }
             }
-        
-            stage('api-tests'){
-                steps{
-                    script{
-                        try{
-                            build job: 'catalogue-api-tests',
-                            wait: true, // should wait
-                            propagater: true, // downstream errors are considered as upstream errors too
-                            parameters: [
+            stage('api-tests') {
+                when {
+                    expression { env_ENVIRONMENT == 'dev' }
+                }
+                options {
+                    timeout(time: 2, unit: 'MINUTES')
+                }
+                steps {
+                    script {
+                        try {
+                            build job: 'ROBOSHOP/catalogue-api-tests', parameters: [
                                 string(name: 'NAMESPACE', value: 'roboshop-dev'),
-                                string(name: 'COMMIT_ID', value: "${env.GIT_COMMIT}")
-                            ]
-                            utils.updateCommitStatus("success", "api tests is successful", "api tests")
+                                string(name: 'COMMIT_ID', value: env.GIT_COMMIT)
+                            ], wait: true, propagate: true
+                            utils.updateCommitStatus('success', 'catalogue-api-tests passed', 'api-tests')
                         }
-                        catch(Exception e){
-                              utils.updateCommitStatus("failure", "api tests is failed", "api tests")
-                              throw e
+                        catch (Exception e) {
+                            utils.updateCommitStatus('failure', 'catalogue-api-tests failed', 'api-tests')
+                            throw e
                         }
                     }
                 }
             }
-
-              /* Dev-deploy and api-tests passed against this commit — open the Jira ticket
+            /* Dev-deploy and api-tests passed against this commit — open the Jira ticket
                that tracks it through SIT/UAT/PROD, carrying the commit and version so
                nobody has to type them in by hand later. Jenkins does not trigger SIT
                itself — the ticket sits at Trigger SIT until Jira's Automation rule
@@ -414,20 +481,25 @@ def call(Map configMap) {
             }
         }
 
-        post { 
-            always { 
-                echo 'I will always say Hello again!'
-            }
+        post {
             success {
-            /* slackSend channel: '#jenkins-alerts-90s',
-                color: 'good',
-                message: "Success: Job '${env.JOB_NAME}' (${env.BUILD_NUMBER}) (${env.BUILD_URL}) ran successfully."
-            } */
+                /* slackSend(
+                    channel: '#test-ci',
+                    color: 'good',
+                    tokenCredentialId: 'slack-token',
+                    message: "✅ *${env_COMPONENT ?: component}* ${env_ENVIRONMENT} deploy succeeded — commit `${env_COMMIT_ID ?: env.GIT_COMMIT}` (<${env.BUILD_URL}console|console>)"
+                ) */
+                echo "success"
+            }
             failure {
-            /* slackSend channel: '#jenkins-alerts-90s',
+                /* slackSend(
+                    channel: '#test-ci',
                     color: 'danger',
-                    message: "Failed: Job '${env.JOB_NAME}' (${env.BUILD_NUMBER}) (${env.BUILD_URL}) has failed."
-           } */
+                    tokenCredentialId: 'slack-token',
+                    message: "❌ *${env_COMPONENT ?: component}* ${env_ENVIRONMENT} deploy failed — commit `${env_COMMIT_ID ?: env.GIT_COMMIT}` (<${env.BUILD_URL}console|console>)"
+                ) */
+                echo "failure"
+            }
         }
     }
 }
