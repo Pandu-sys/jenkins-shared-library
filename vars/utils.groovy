@@ -139,29 +139,24 @@ def tagCommit(String commitSha, String tag) {
 // Configure System -> JIRA Steps, and referenced here via the JIRA_SITE env var
 // each pipeline sets, so these calls don't need a site name passed explicitly.
 def createJiraTicket(String projectKey, String commitId, String version) {
-    def fields = jiraGetFields()
-    if (!fields.successful) {
-        error("Could not fetch Jira fields: ${fields.error}")
-    }
-    def commitFieldId = fields.data.find { it.name?.trim()?.equalsIgnoreCase('Commit ID') }?.id
-    def versionFieldId = fields.data.find { it.name?.trim()?.equalsIgnoreCase('Version') }?.id
-    if (!commitFieldId || !versionFieldId) {
-        echo "Fields returned by jiraGetFields: ${fields.data.collect { "${it.name} (${it.id})" }.join(', ')}"
-        error("Could not find the 'Commit ID' / 'Version' custom fields on this Jira site")
-    }
+    def commitFieldId = 'customfield_10043'
+    def versionFieldId = 'customfield_10044'
 
     def issueFields = [
         project  : [key: projectKey],
         issuetype: [name: 'Task'],
         summary  : "Release ${version} - ${commitId}"
     ]
+
     issueFields[commitFieldId] = commitId
     issueFields[versionFieldId] = version
 
     def result = jiraNewIssue(issue: [fields: issueFields])
+
     if (!result.successful) {
         error("Failed to create Jira ticket: ${result.error}")
     }
+
     return result.data.key
 }
 
